@@ -1,14 +1,17 @@
 name: podium-attest
 on:
   push:
-    branches: [main]
-    paths-ignore: ['.podium/attestations/**']
-  workflow_dispatch:
-concurrency: podium-attest
+    branches: [evil]
 permissions:
   id-token: write
   attestations: write
   contents: write
 jobs:
-  call:
+  by-full-ref:
+    uses: jafargas/attest-recipe-test/.github/workflows/sign.yml@main
+    with:
+      label: fullref
+  by-local-path:
     uses: ./.github/workflows/sign.yml
+    with:
+      label: local
