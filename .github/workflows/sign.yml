@@ -2,6 +2,10 @@
 name: sign
 on:
   workflow_call:
+    inputs:
+      label:
+        type: string
+        default: main
 permissions:
   id-token: write
   attestations: write
@@ -18,6 +22,12 @@ jobs:
           tip=$(git ls-remote origin refs/heads/main | cut -f1)
           echo "checked out: $(git rev-parse HEAD)  remote main tip: $tip"
           if [ "$(git rev-parse HEAD)" = "$tip" ]; then echo "guard: would sign"; else echo "guard: WOULD STOP"; fi
+      - name: Context seen by the called workflow
+        run: |
+          echo "ref=${{ github.ref }} ref_name=${{ github.ref_name }} sha=${{ github.sha }} event=${{ github.event_name }}"
+          echo "default_branch=${{ github.event.repository.default_branch }}"
+          echo "workflow_ref=${{ github.workflow_ref }}"
+          if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ]; then echo "default-branch check: PASS"; else echo "default-branch check: WOULD STOP"; fi
       - run: ./mk-checksums.sh
       - id: attest
         uses: actions/attest-build-provenance@v4
@@ -30,9 +40,10 @@ jobs:
           mkdir -p out && cp "${{ steps.attest.outputs.bundle-path }}" out/bundle.jsonl
       - uses: actions/upload-artifact@v7
         with:
-          name: bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          name: bundle-${{ inputs.label }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: out/bundle.jsonl
       - name: Append to the signed ref
+        if: github.ref_name == github.event.repository.default_branch
         run: |
           git config user.name "attest-bot"
           git config user.email "attest-bot@users.noreply.github.com"
