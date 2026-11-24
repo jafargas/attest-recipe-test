@@ -1,0 +1,50 @@
+# Reusable signing workflow: the certificate identity is this file's reference.
+name: sign
+on:
+  workflow_call:
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Guard (reported, not enforced, so a re-run can be observed)
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          echo "checked out: $(git rev-parse HEAD)  remote main tip: $tip"
+          if [ "$(git rev-parse HEAD)" = "$tip" ]; then echo "guard: would sign"; else echo "guard: WOULD STOP"; fi
+      - run: ./mk-checksums.sh
+      - id: attest
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: checksums.txt
+      - name: Show bundle output
+        run: |
+          echo "bundle-path: ${{ steps.attest.outputs.bundle-path }}"
+          wc -l "${{ steps.attest.outputs.bundle-path }}"
+          mkdir -p out && cp "${{ steps.attest.outputs.bundle-path }}" out/bundle.jsonl
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/bundle.jsonl
+      - name: Append to the signed ref
+        run: |
+          git config user.name "attest-bot"
+          git config user.email "attest-bot@users.noreply.github.com"
+          main=$(git rev-parse HEAD)
+          mkdir -p .podium/attestations
+          d=$(sha256sum out/bundle.jsonl | cut -d' ' -f1)
+          cp out/bundle.jsonl ".podium/attestations/$d.sigstore.json"
+          git add -f .podium/attestations
+          tree=$(git write-tree)
+          if prev=$(git rev-parse -q --verify origin/podium/signed); then
+            c=$(git commit-tree "$tree" -p "$prev" -p "$main" -m "attest $main")
+          else
+            c=$(git commit-tree "$tree" -p "$main" -m "attest $main")
+          fi
+          git push origin "$c:refs/heads/podium/signed"

@@ -1,0 +1,13 @@
+name: podium-attest
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['.podium/attestations/**']
+concurrency: podium-attest
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+jobs:
+  call:
+    uses: ./.github/workflows/sign.yml
