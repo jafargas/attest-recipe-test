@@ -1,0 +1,9 @@
+name: conc-b
+on:
+  workflow_dispatch:
+concurrency: conc-test
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 50
